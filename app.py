@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from flask_restful import Resource, Api 
+from flask_restful import Resource, Api, reqparse 
 from flask_jwt import JWT, jwt_required
 from security import authenticate, identity
 
@@ -33,11 +33,22 @@ items = [
 201 - CREATED
 202 - ACCEPTED
 400 - BAD REQUEST
+401 - UNAUTHORIZED
 404 - NOT FOUND
 '''
 
 class Item(Resource):
-    
+   
+   
+    request_parser = reqparse.RequestParser()
+    request_parser.add_argument(
+        'price',
+        required= True,
+        type= int,
+        help = 'price field cannot be left blank and should be integer'
+    )
+
+
     def get(self, name):
         item = next(filter(lambda item: item['name'] == name, items), None)
         return {'item': item}, 200 if item else 404
@@ -46,19 +57,36 @@ class Item(Resource):
     def post(self, name):
         if next(filter(lambda item: item['name'] == name, items), None):
            return {'message': f"item with name {name} already exists"}, 400     
-
-        request_data = request.get_json()
+        data = Item.request_parser.parse_args()
         item = {
             'name': name,
-            'price': request_data['price']
+            'price': data['price']
         }
         items.append(item)
         return item, 201
 
 
+    def put(self, name):
+        global items
+        data = Item.request_parser.parse_args()
+        item = next(filter(lambda item: item['name'] == name, items), None)
+        if item:
+            item.update(data)
+            items = list(map(lambda ele: item if ele['name'] == name else ele, items ))
+            return item, 200
+        else:
+            item = dict(name = name, price = data['price'])
+            items.append(item)
+            return item, 200
+
+
+    def delete(self, name):
+        global items
+        items = list(filter(lambda item: item['name'] != name, items))        
+        return {"message" : f"Item with name {name} deleted"}, 200
+
 class ItemList(Resource):
 
-    @jwt_required()
     def get(self):
         return { 'items': items }, 200
 
